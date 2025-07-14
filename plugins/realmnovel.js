@@ -1,89 +1,108 @@
-import { Plugin } from '@plugin';
+function fetchWithUserAgent(url) {
+    return fetch(url, {
+        headers: {
+            'User-Agent': 'Mozilla/5.0'
+        }
+    });
+}
 
-export default new Plugin({
-  id: 'realmnovel',
-  name: 'RealmNovel',
-  site: 'https://www.realmnovel.com',
-  type: 'novel',
-  language: 'en',
-
-  async popularNovels(page) {
-    const url = `https://www.realmnovel.com/latest-release?page=${page}`;
-    const body = await this.request(url);
-    const loaded = this.cheerio.load(body);
+async function popularNovels(page) {
+    const url = `https://www.realmnovel.com/novels?page=${page}`;
+    const res = await fetchWithUserAgent(url);
+    const html = await res.text();
+    const loadedCheerio = cheerio.load(html);
 
     const novels = [];
 
-    loaded('.book-img-text').each((i, el) => {
-      const name = loaded(el).find('.book-name').text().trim();
-      const cover = loaded(el).find('img').attr('src');
-      const link = loaded(el).find('a').attr('href');
+    loadedCheerio('div.book-item').each((_, element) => {
+        const name = loadedCheerio(element).find('h3.book-title').text().trim();
+        const cover = loadedCheerio(element).find('img').attr('src');
+        const url = loadedCheerio(element).find('a').attr('href');
 
-      novels.push({
-        name,
-        cover,
-        path: link,
-      });
+        novels.push({
+            name,
+            cover,
+            url: 'https://www.realmnovel.com' + url,
+        });
     });
 
     return novels;
-  },
+}
 
-  async parseNovelAndChapters(novelUrl) {
-    const body = await this.request(novelUrl);
-    const loaded = this.cheerio.load(body);
+async function parseNovelAndChapters(novelUrl) {
+    const res = await fetchWithUserAgent(novelUrl);
+    const html = await res.text();
+    const loadedCheerio = cheerio.load(html);
 
-    const name = loaded('h1').text().trim();
-    const cover = loaded('.book-cover img').attr('src');
-    const summary = loaded('.book-desc').text().trim();
+    const novel = {
+        url: novelUrl,
+        name: loadedCheerio('h1.novel-title').text().trim(),
+        cover: loadedCheerio('div.novel-cover img').attr('src'),
+        summary: loadedCheerio('div.novel-summary').text().trim(),
+        chapters: [],
+    };
 
-    const chapters = [];
+    loadedCheerio('ul.chapter-list li a').each((_, el) => {
+        const chapterName = loadedCheerio(el).text().trim();
+        const chapterUrl = loadedCheerio(el).attr('href');
 
-    loaded('.chapter-list a').each((i, el) => {
-      chapters.push({
-        name: loaded(el).text().trim(),
-        path: loaded(el).attr('href'),
-      });
+        novel.chapters.push({
+            name: chapterName,
+            url: 'https://www.realmnovel.com' + chapterUrl,
+            releaseTime: null,
+        });
     });
 
-    return {
-      name,
-      cover,
-      summary,
-      chapters,
-    };
-  },
+    novel.chapters.reverse(); // ترتيب تصاعدي
 
-  async parseChapter(chapterUrl) {
-    const body = await this.request(chapterUrl);
-    const loaded = this.cheerio.load(body);
+    return novel;
+}
 
-    const content = loaded('.chapter-content').html();
+async function parseChapter(chapterUrl) {
+    const res = await fetchWithUserAgent(chapterUrl);
+    const html = await res.text();
+    const loadedCheerio = cheerio.load(html);
+
+    const content = loadedCheerio('div.chapter-content').html();
 
     return {
-      content,
+        content,
     };
-  },
+}
 
-  async searchNovels(searchTerm) {
+async function searchNovels(searchTerm) {
     const url = `https://www.realmnovel.com/search?keyword=${searchTerm}`;
-    const body = await this.request(url);
-    const loaded = this.cheerio.load(body);
+    const res = await fetchWithUserAgent(url);
+    const html = await res.text();
+    const loadedCheerio = cheerio.load(html);
 
-    const results = [];
+    const novels = [];
 
-    loaded('.book-img-text').each((i, el) => {
-      const name = loaded(el).find('.book-name').text().trim();
-      const cover = loaded(el).find('img').attr('src');
-      const link = loaded(el).find('a').attr('href');
+    loadedCheerio('div.book-item').each((_, element) => {
+        const name = loadedCheerio(element).find('h3.book-title').text().trim();
+        const cover = loadedCheerio(element).find('img').attr('src');
+        const url = loadedCheerio(element).find('a').attr('href');
 
-      results.push({
-        name,
-        cover,
-        path: link,
-      });
+        novels.push({
+            name,
+            cover,
+            url: 'https://www.realmnovel.com' + url,
+        });
     });
 
-    return results;
-  },
-});
+    return novels;
+}
+
+const realmnovel = {
+    id: 'realmnovel',
+    name: 'RealmNovel',
+    site: 'https://www.realmnovel.com',
+    version: '1.0.0',
+    popularNovels,
+    parseNovelAndChapters,
+    parseChapter,
+    searchNovels,
+};
+
+export default realmnovel;
+   
